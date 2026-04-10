@@ -380,6 +380,7 @@ function generatePDF(f) {
 // ── Cloudinary Upload ─────────────────────────────────────────────────────────
 
 async function uploadFileToCloudinary(file) {
+  console.log('[Cloudinary Debug] cloud_name:', CLOUDINARY_CLOUD_NAME, '| upload_preset:', CLOUDINARY_UPLOAD_PRESET);
   const formData = new FormData();
   formData.append('file', file);
   formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
