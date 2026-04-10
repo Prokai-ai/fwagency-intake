@@ -3,11 +3,6 @@
 import { useState, useRef } from "react";
 import { jsPDF } from "jspdf";
 
-// ── Cloudinary Config ─────────────────────────────────────────────────────────
-const CLOUDINARY_CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-const CLOUDINARY_UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 const NAV = '#11223B';
 const NAV2 = '#1A3356';
@@ -144,77 +139,6 @@ function Radios({ label, required, options, value, onChange, error }) {
   );
 }
 
-function FileZone({ label, optional, hint, accept, multiple, files, onFiles, previews = [] }) {
-  const ref = useRef();
-  const [drag, setDrag] = useState(false);
-
-  const process = (raw) => {
-    const incoming = Array.from(raw);
-    if (!multiple) {
-      const single = [incoming[0]].filter(Boolean);
-      const prvs = single.map(f => f.type.startsWith('image/') ? URL.createObjectURL(f) : null);
-      onFiles(single, prvs);
-      return;
-    }
-    const merged = [...files];
-    incoming.forEach(newFile => {
-      const isDupe = merged.some(f => f.name === newFile.name && f.size === newFile.size);
-      if (!isDupe) merged.push(newFile);
-    });
-    const prvs = merged.map(f => f.type.startsWith('image/') ? URL.createObjectURL(f) : null);
-    onFiles(merged, prvs);
-  };
-
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <Label optional={optional}>{label}</Label>
-      {hint && <div style={{ fontSize: 11, color: MGR, marginBottom: 7, lineHeight: 1.5 }}>{hint}</div>}
-      <div
-        onClick={() => ref.current.click()}
-        onDrop={e => { e.preventDefault(); setDrag(false); process(e.dataTransfer.files); }}
-        onDragOver={e => { e.preventDefault(); setDrag(true); }}
-        onDragLeave={() => setDrag(false)}
-        style={{
-          border: `2px dashed ${drag ? GLD : RUL}`, borderRadius: 8,
-          padding: '20px 16px', textAlign: 'center', cursor: 'pointer',
-          background: drag ? '#FDF9EE' : OFW, transition: 'all 0.2s'
-        }}>
-        <div style={{ fontSize: 22, marginBottom: 5 }}>📎</div>
-        <div style={{ fontSize: 12, color: MGR }}>
-          Drop files here or{' '}
-          <span style={{ color: GLD, fontWeight: 700 }}>click to browse</span>
-        </div>
-        {files.length > 0 && (
-          <div style={{ marginTop: 8, fontSize: 12, color: NAV, fontWeight: 600 }}>
-            {files.length} file{files.length !== 1 ? 's' : ''} selected
-            <span
-              onClick={e => { e.stopPropagation(); onFiles([], []); }}
-              style={{
-                marginLeft: 8, color: ERR, cursor: 'pointer', fontWeight: 400,
-                fontSize: 11, textDecoration: 'underline'
-              }}>
-              clear all
-            </span>
-          </div>
-        )}
-        <input ref={ref} type="file" accept={accept} multiple={multiple}
-          onChange={e => process(e.target.files)} style={{ display: 'none' }} />
-      </div>
-      {previews.filter(Boolean).length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
-          {previews.map((src, i) => src && (
-            <div key={i} style={{ position: 'relative' }}>
-              <img src={src} alt="" style={{
-                width: 68, height: 68, objectFit: 'cover',
-                borderRadius: 6, border: `2px solid ${RUL}`
-              }} />
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function SectionHead({ n, title, desc }) {
   return (
@@ -297,15 +221,15 @@ function generatePDF(f) {
       ['Market Center', f.marketCenter], ['Service Area', f.serviceArea],
     ]],
     ['BRAND IDENTITY', [
-      ['Brand Guideline', f.guideNames.length ? f.guideNames.join(', ') : ''],
-      ['Logo Files', f.logoNames.length ? `${f.logoNames.length} file(s) uploaded` : ''],
+      ['Brand Guideline', f.guideLink],
+      ['Logo Files', f.logoLink],
       ['Primary Color', f.primaryColor], ['Secondary Color', f.secondaryColor],
       ['Font', f.primaryFont], ['Tone', f.tones.join(', ')],
       ['Always Use', f.alwaysUse], ['Never Use', f.neverUse],
     ]],
     ['INSPIRATION', [
-      ['Flyers Uploaded', f.flyerFiles.length ? `${f.flyerFiles.length} file(s)` : ''],
-      ['Posts Uploaded', f.postFiles.length ? `${f.postFiles.length} file(s)` : ''],
+      ['Flyers / Inspiration', f.flyerDriveLink],
+      ['Social Posts', f.postLink],
       ['Instagram', f.instagramProfile], ['Facebook', f.facebookProfile],
       ['Inspiration Notes', f.inspirationNote],
     ]],
@@ -377,48 +301,16 @@ function generatePDF(f) {
   doc.save(`FWAgency_BrandIntake_${name}.pdf`);
 }
 
-// ── Cloudinary Upload ─────────────────────────────────────────────────────────
 
-async function uploadFileToCloudinary(file) {
-  console.log('[Cloudinary Debug] cloud_name:', CLOUDINARY_CLOUD_NAME, '| upload_preset:', CLOUDINARY_UPLOAD_PRESET);
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-  formData.append('resource_type', 'auto');
-  const res = await fetch(
-    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`,
-    { method: 'POST', body: formData }
-  );
-  const data = await res.json();
-  if (!res.ok) throw new Error(`Cloudinary upload failed for ${file.name}: ${data.error?.message ?? res.status}`);
-  return data.secure_url;
-}
-
-async function uploadAllFiles(f) {
-  const groups = [
-    { label: 'Brand Guideline', files: f.guideFiles },
-    { label: 'Logo',            files: f.logoFiles },
-    { label: 'Flyer',           files: f.flyerFiles },
-    { label: 'Social Post',     files: f.postFiles },
-  ];
-  const urls = {};
-  await Promise.all(
-    groups.map(async ({ label, files }) => {
-      if (!files.length) return;
-      const uploaded = await Promise.all(files.map(uploadFileToCloudinary));
-      urls[label] = uploaded;
-    })
-  );
-  return urls;
+async function uploadAllFiles() {
+  return {};
 }
 
 // ── Formspree Submission ─────────────────────────────────────────────────────
 
 async function submitToFormspree(f, fileUrls) {
   const payload = {};
-  const skip = new Set(['guideFiles', 'logoFiles', 'logoPreviews', 'flyerFiles', 'flyerPreviews', 'postFiles', 'postPreviews']);
   for (const [k, v] of Object.entries(f)) {
-    if (skip.has(k)) continue;
     if (Array.isArray(v)) {
       if (v.length) payload[k] = v.join(', ');
     } else if (v !== '' && v !== null && v !== undefined) {
@@ -443,12 +335,12 @@ async function submitToFormspree(f, fileUrls) {
 const INIT = {
   firstName: '', lastName: '', preferredName: '', phone: '', email: '',
   brokerage: '', marketCenter: '', licenseNumber: '', yearsInRE: '', serviceArea: '',
-  guideFiles: [], guideNames: [],
-  logoFiles: [], logoPreviews: [], logoNames: [],
+  guideLink: '',
+  logoLink: '',
   primaryColor: '#11223B', secondaryColor: '#C9A84C', accentColor: '',
   primaryFont: '', tones: [], alwaysUse: '', neverUse: '',
-  flyerFiles: [], flyerPreviews: [], flyerNames: [],
-  postFiles: [], postPreviews: [], postNames: [],
+  flyerDriveLink: '',
+  postLink: '',
   instagramProfile: '', facebookProfile: '', linkedInProfile: '', inspirationNote: '',
   instagramHandle: '', facebookHandle: '', linkedInHandle: '',
   screenShareDate: '', screenShareTime: '', socialNotes: '',
@@ -474,10 +366,7 @@ export default function BrandIntakeForm() {
   const toggle = (k, v) => setF(p => ({
     ...p, [k]: p[k].includes(v) ? p[k].filter(x => x !== v) : [...p[k], v]
   }));
-  const filesSetter = (fk, pk, nk) => (arr, prvs) =>
-    setF(p => ({ ...p, [fk]: arr, [pk]: prvs, [nk]: arr.map(x => x.name) }));
-
-  const validate = s => {
+const validate = s => {
     const e = {};
     if (s === 0) {
       if (!f.firstName.trim()) e.firstName = 'Required';
@@ -569,16 +458,12 @@ export default function BrandIntakeForm() {
     <div>
       <SectionHead n="02" title="Brand Identity"
         desc="Help us understand your brand visually and tonally. Everything here shapes how your content looks and sounds." />
-      <FileZone label="Brand Guideline" optional
-        hint="Upload your brand guideline document if you have one — PDF, Word, or image"
-        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" multiple={false}
-        files={f.guideFiles} previews={[]}
-        onFiles={filesSetter('guideFiles', '_', 'guideNames')} />
-      <FileZone label="Logo Files" optional
-        hint="PNG or SVG preferred. Include both light and dark versions if you have them."
-        accept="image/*,.svg,.eps,.ai" multiple={true}
-        files={f.logoFiles} previews={f.logoPreviews}
-        onFiles={filesSetter('logoFiles', 'logoPreviews', 'logoNames')} />
+      <Input label="Brand Guideline (Google Drive Link)" optional
+        placeholder="Paste a Google Drive link to your brand guideline document"
+        value={f.guideLink} onChange={e => set('guideLink', e.target.value)} />
+      <Input label="Logo Files (Google Drive Link)" optional
+        placeholder="Paste a Google Drive link to your logo files"
+        value={f.logoLink} onChange={e => set('logoLink', e.target.value)} />
       <div style={{ marginBottom: 16 }}>
         <Label optional>Brand Colors</Label>
         <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
@@ -621,16 +506,12 @@ export default function BrandIntakeForm() {
     <div>
       <SectionHead n="03" title="Inspiration & Style References"
         desc="Upload examples of content you love — yours or others. The listing automation learns from these. The more you share, the better the match." />
-      <FileZone label="Flyers You Love (3–5 recommended)" optional
-        hint="Listing flyers, open house flyers, postcards — anything that represents your aesthetic"
-        accept="image/*,.pdf" multiple={true}
-        files={f.flyerFiles} previews={f.flyerPreviews}
-        onFiles={filesSetter('flyerFiles', 'flyerPreviews', 'flyerNames')} />
-      <FileZone label="Social Posts You Love (3–5 recommended)" optional
-        hint="Screenshots of posts you love — yours or others — that capture the vibe you want"
-        accept="image/*" multiple={true}
-        files={f.postFiles} previews={f.postPreviews}
-        onFiles={filesSetter('postFiles', 'postPreviews', 'postNames')} />
+      <Input label="Flyers / Inspiration (Google Drive Link)" optional
+        placeholder="Paste a Google Drive link to a folder of flyers or inspiration examples"
+        value={f.flyerDriveLink} onChange={e => set('flyerDriveLink', e.target.value)} />
+      <Input label="Social Posts You Love (Google Drive Link)" optional
+        placeholder="Paste a Google Drive link to a folder of social posts you love"
+        value={f.postLink} onChange={e => set('postLink', e.target.value)} />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 12px' }}>
         <Input label="Instagram Profile" optional placeholder="instagram.com/handle"
           value={f.instagramProfile} onChange={e => set('instagramProfile', e.target.value)} />
@@ -860,15 +741,15 @@ export default function BrandIntakeForm() {
         ['Market Center', f.marketCenter], ['Service Area', f.serviceArea],
       ]} />
       <ReviewCard title="BRAND IDENTITY" rows={[
-        ['Brand Guideline', f.guideNames.length ? f.guideNames.join(', ') : ''],
-        ['Logo Files', f.logoNames.length ? `${f.logoNames.length} file(s) uploaded` : ''],
+        ['Brand Guideline', f.guideLink],
+        ['Logo Files', f.logoLink],
         ['Primary Color', f.primaryColor], ['Secondary Color', f.secondaryColor],
         ['Font', f.primaryFont], ['Tone', f.tones.join(', ')],
         ['Always Use', f.alwaysUse], ['Never Use', f.neverUse],
       ]} />
       <ReviewCard title="INSPIRATION" rows={[
-        ['Flyers Uploaded', f.flyerFiles.length ? `${f.flyerFiles.length} file(s)` : ''],
-        ['Posts Uploaded', f.postFiles.length ? `${f.postFiles.length} file(s)` : ''],
+        ['Flyers / Inspiration', f.flyerDriveLink],
+        ['Social Posts', f.postLink],
         ['Instagram', f.instagramProfile], ['Facebook', f.facebookProfile],
         ['Inspiration Notes', f.inspirationNote],
       ]} />
